@@ -5,6 +5,8 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const db = require('./db');
+const apiRouter= require('./api/api');
+
 
 // ===========================================
 // CORS の設定（全許可）
@@ -46,6 +48,8 @@ app.get('/test-db', async (req, res) => {
     res.status(500).send('Database connection error');
   }
 });
+
+app.use('/api', apiRouter);
 
 
 app.listen(PORT, () => {
