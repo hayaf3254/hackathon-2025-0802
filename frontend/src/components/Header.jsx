@@ -1,23 +1,35 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
-import { Home, Plus, BarChart3, Flame } from 'lucide-react'
+import { Home, Plus, BarChart3, Flame, LogOut, User, Trophy, Calendar } from 'lucide-react'
 
 function Header() {
-  const { user, worldState } = useUser()
+  const { user, worldState, actions } = useUser()
   const location = useLocation()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    // localStorageからログイン情報を削除
+    localStorage.removeItem('worldend_user')
+    // ユーザー状態をリセット
+    actions.logoutUser()
+    // ログイン画面に遷移
+    navigate('/login')
+  }
 
   const navItems = [
     { path: '/home', icon: Home, label: 'ホーム' },
     { path: '/create', icon: Plus, label: 'タスク作成' },
-    { path: '/result', icon: BarChart3, label: '実績' }
+    { path: '/calendar', icon: Calendar, label: 'カレンダー' },
+    { path: '/result', icon: BarChart3, label: '実績' },
+    { path: '/ranking', icon: Trophy, label: 'ランキング' }
   ]
 
   const getPointsColor = () => {
-    if (user.points === 0) return 'text-red-500 animate-pulse'
-    if (user.points <= 20) return 'text-red-400'
-    if (user.points <= 50) return 'text-yellow-400'
-    return 'text-worldEnd-gold'
+    if (user.points < -100) return 'text-red-500 animate-pulse' // 世界滅亡
+    if (user.points < -20) return 'text-red-400'              // 危険
+    if (user.points < 50) return 'text-yellow-400'            // 警告
+    return 'text-worldEnd-gold'                               // 正常
   }
 
   const getWorldStatusMessage = () => {
@@ -50,17 +62,37 @@ function Header() {
           </div>
           
           <div className="text-right">
-            <div className="flex items-center space-x-2">
-              <Flame className="h-6 w-6 text-worldEnd-gold" />
-              <span className={`text-2xl font-bold ${getPointsColor()}`}>
-                {user.points}pt
-              </span>
-            </div>
-            {user.isWorldDestroyed && (
-              <div className="text-red-500 text-sm mt-1 animate-pulse">
-                世界が滅亡しました！
+            {/* ユーザー情報 */}
+            <div className="flex items-center space-x-4">
+              <div className="text-right">
+                <div className="flex items-center space-x-2 mb-1">
+                  <User className="h-4 w-4 text-gray-300" />
+                  <span className="text-sm text-gray-300">
+                    {user.name || user.id}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Flame className="h-6 w-6 text-worldEnd-gold" />
+                  <span className={`text-2xl font-bold ${getPointsColor()}`}>
+                    {user.points}pt
+                  </span>
+                </div>
+                {user.isWorldDestroyed && (
+                  <div className="text-red-500 text-sm mt-1 animate-pulse">
+                    世界が滅亡しました！
+                  </div>
+                )}
               </div>
-            )}
+              
+              {/* ログアウトボタン */}
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all"
+                title="ログアウト"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
 

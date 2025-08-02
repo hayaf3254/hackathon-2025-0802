@@ -1,15 +1,47 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react'
 
-// Initial state
-const initialState = {
-  user: {
+// localStorageからログイン情報を取得
+const getStoredUser = () => {
+  try {
+    const stored = localStorage.getItem('worldend_user')
+    if (stored) {
+      const userData = JSON.parse(stored)
+      return {
+        id: userData.id,
+        name: userData.name,
+        points: userData.points || 0,
+        isWorldDestroyed: userData.points < -100
+      }
+    }
+  } catch (error) {
+    console.error('Failed to parse stored user data:', error)
+  }
+  return {
     id: 'user_001',
-    points: 100,
+    points: 0,
     isWorldDestroyed: false
-  },
-  tasks: [], // Empty tasks list
-  worldState: 'normal' // normal, warning, critical, destroyed
+  }
 }
+
+// Helper function to determine world state based on points (define early)
+function getWorldState(points) {
+  if (points < -100) return 'destroyed'
+  if (points < -20) return 'critical'
+  if (points < 50) return 'warning'
+  return 'normal'
+}
+
+// Initial state
+const getInitialState = () => {
+  const user = getStoredUser()
+  return {
+    user,
+    tasks: [], // Empty tasks list
+    worldState: getWorldState(user.points) // ユーザーのポイントに基づいて世界状態を設定
+  }
+}
+
+const initialState = getInitialState()
 
 // Action types
 export const ActionTypes = {
@@ -19,7 +51,10 @@ export const ActionTypes = {
   UPDATE_POINTS: 'UPDATE_POINTS',
   SET_WORLD_STATE: 'SET_WORLD_STATE',
   DESTROY_WORLD: 'DESTROY_WORLD',
-  RESET_WORLD: 'RESET_WORLD'
+  RESET_WORLD: 'RESET_WORLD',
+  LOGIN_USER: 'LOGIN_USER',
+  CREATE_USER: 'CREATE_USER',
+  LOGOUT_USER: 'LOGOUT_USER'
 }
 
 // Reducer function
@@ -40,8 +75,8 @@ function userReducer(state, action) {
       return { ...state, tasks: updatedTasks }
     
     case ActionTypes.UPDATE_POINTS:
-      const newPoints = Math.max(0, state.user.points + action.payload)
-      const isDestroyed = newPoints === 0
+      const newPoints = state.user.points + action.payload // マイナス値も許可
+      const isDestroyed = newPoints < -100
       return {
         ...state,
         user: {
@@ -65,8 +100,39 @@ function userReducer(state, action) {
     case ActionTypes.RESET_WORLD:
       return {
         ...state,
-        user: { ...state.user, points: 100, isWorldDestroyed: false },
+        user: { ...state.user, points: 0, isWorldDestroyed: false }, // 初期値を0に変更
         worldState: 'normal'
+      }
+    
+    case ActionTypes.LOGIN_USER:
+      return {
+        ...state,
+        user: {
+          id: action.payload.id,
+          name: action.payload.name,
+          points: action.payload.points || 0,
+          isWorldDestroyed: false
+        },
+        tasks: action.payload.tasks || [],
+        worldState: getWorldState(action.payload.points || 0)
+      }
+    
+    case ActionTypes.CREATE_USER:
+      return {
+        ...state,
+        user: {
+          id: action.payload.id,
+          name: action.payload.name,
+          points: 0,
+          isWorldDestroyed: false
+        },
+        tasks: [],
+        worldState: 'normal'
+      }
+    
+    case ActionTypes.LOGOUT_USER:
+      return {
+        ...initialState
       }
     
     default:
@@ -74,13 +140,20 @@ function userReducer(state, action) {
   }
 }
 
-// Helper function to determine world state based on points
-function getWorldState(points) {
-  if (points === 0) return 'destroyed'
-  if (points <= 20) return 'critical'
-  if (points <= 50) return 'warning'
-  return 'normal'
+// 段階的ポイント制の計算関数
+function calculateTaskPoints(dueDate, completedAt) {
+  const due = new Date(dueDate)
+  const completed = new Date(completedAt)
+  const daysDiff = Math.ceil((due - completed) / (1000 * 60 * 60 * 24))
+  
+  if (daysDiff >= 7) return 10  // 1週間前まで
+  if (daysDiff >= 3) return 5   // 3日前まで  
+  if (daysDiff >= 1) return 3   // 前日まで
+  if (daysDiff >= 0) return 1   // 当日
+  return -50 // 期限切れ
 }
+
+
 
 // Create context
 const UserContext = createContext()
@@ -96,26 +169,75 @@ export function UserProvider({ children }) {
     addTask: (task) => dispatch({ type: ActionTypes.ADD_TASK, payload: task }),
     
     completeTask: (taskId, completedAt = new Date().toISOString()) => {
-      dispatch({
-        type: ActionTypes.COMPLETE_TASK,
-        payload: { taskId, completedAt }
-      })
-      // Award points for completion
-      dispatch({ type: ActionTypes.UPDATE_POINTS, payload: 5 })
+      // タスクを見つけて段階的ポイント制でポイントを計算
+      const task = state.tasks.find(t => t.id === taskId)
+      if (task) {
+        const points = calculateTaskPoints(task.due_date, completedAt)
+        dispatch({
+          type: ActionTypes.COMPLETE_TASK,
+          payload: { taskId, completedAt }
+        })
+        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: points })
+        
+        // localStorageも更新
+        const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
+        if (currentUser.id) {
+          const newPoints = currentUser.points + points
+          localStorage.setItem('worldend_user', JSON.stringify({
+            ...currentUser,
+            points: newPoints
+          }))
+        }
+      }
     },
     
     failTask: () => {
-      // Deduct points for failed task
-      dispatch({ type: ActionTypes.UPDATE_POINTS, payload: -10 })
+      // 期限切れのペナルティを-50ポイントに変更
+      dispatch({ type: ActionTypes.UPDATE_POINTS, payload: -50 })
+      
+      // localStorageも更新
+      const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
+      if (currentUser.id) {
+        const newPoints = currentUser.points - 50
+        localStorage.setItem('worldend_user', JSON.stringify({
+          ...currentUser,
+          points: newPoints
+        }))
+      }
     },
     
     updatePoints: (pointChange) => {
       dispatch({ type: ActionTypes.UPDATE_POINTS, payload: pointChange })
+      // localStorageも更新
+      const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
+      if (currentUser.id) {
+        const newPoints = currentUser.points + pointChange
+        localStorage.setItem('worldend_user', JSON.stringify({
+          ...currentUser,
+          points: newPoints
+        }))
+      }
     },
     
     destroyWorld: () => dispatch({ type: ActionTypes.DESTROY_WORLD }),
     
-    resetWorld: () => dispatch({ type: ActionTypes.RESET_WORLD })
+    resetWorld: () => dispatch({ type: ActionTypes.RESET_WORLD }),
+    
+    loginUser: (id, name, points = 0, tasks = []) => {
+      dispatch({
+        type: ActionTypes.LOGIN_USER,
+        payload: { id, name, points, tasks }
+      })
+    },
+    
+    createUser: (id, name) => {
+      dispatch({
+        type: ActionTypes.CREATE_USER,
+        payload: { id, name }
+      })
+    },
+    
+    logoutUser: () => dispatch({ type: ActionTypes.LOGOUT_USER })
   }
 
   // World background images based on world state
