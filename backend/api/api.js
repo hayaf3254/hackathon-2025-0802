@@ -74,5 +74,37 @@ router.post('/getPoint', async (req, res) => {
 
 });
 
+router.put('/updatePoint', async (req, res) => {
+
+    const { id, point } = req.body;
+  
+    if (!id) {
+        return res.status(400).json({ error: 'ユーザIDがないです' });
+    }
+    if (!point) {
+        return res.status(400).json({ error: 'ユーザのpointが存在しないです' });
+    }
+    try{
+        const queryText = 'UPDATE user_table SET point=$2 WHERE id = $1;';
+        const values = [id, point];
+
+        // データベースにクエリを送信
+        const result = await db.query(queryText, values);
+
+        if (result.rowCount > 0) {
+            res.status(200).json({ message: 'ポイントが正常に更新されました', updatedId: id });
+        } else {
+            // idが存在しないなど、何も更新されなかった場合
+            res.status(404).json({ error: '指定されたユーザーが見つかりませんでした。' });
+        }
+
+
+    }
+    catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'データベースエラー' });
+    }
+
+});
 
 module.exports = router;
