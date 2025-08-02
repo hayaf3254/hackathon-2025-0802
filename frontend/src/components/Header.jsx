@@ -1,20 +1,43 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
-import { Home, Plus, BarChart3, Flame, LogOut, User, Trophy, Calendar } from 'lucide-react'
+import { Home, Plus, BarChart3, Flame, LogOut, User, Trophy, Calendar, Loader } from 'lucide-react'
 
 function Header() {
   const { user, worldState, actions } = useUser()
   const location = useLocation()
   const navigate = useNavigate()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const handleLogout = () => {
-    // localStorageからログイン情報を削除
-    localStorage.removeItem('worldend_user')
-    // ユーザー状態をリセット
-    actions.logoutUser()
-    // ログイン画面に遷移
-    navigate('/login')
+  const handleLogout = async () => {
+    if (isLoggingOut) return // 二重実行防止
+    
+    setIsLoggingOut(true)
+    
+    try {
+      console.log('ログアウト開始:', user.name || user.id)
+      
+      // 1. localStorageからログイン情報を削除
+      localStorage.removeItem('worldend_user')
+      console.log('localStorage cleared')
+      
+      // 2. ユーザー状態をリセット
+      actions.logoutUser()
+      console.log('User state reset')
+      
+      // 3. 少し待ってからページ遷移（状態更新を確実にするため）
+      setTimeout(() => {
+        console.log('Navigating to login page')
+        navigate('/login', { replace: true })
+        setIsLoggingOut(false)
+      }, 100)
+      
+    } catch (error) {
+      console.error('ログアウトエラー:', error)
+      // エラーが起きてもログアウトは続行
+      navigate('/login', { replace: true })
+      setIsLoggingOut(false)
+    }
   }
 
   const navItems = [
@@ -87,10 +110,15 @@ function Header() {
               {/* ログアウトボタン */}
               <button
                 onClick={handleLogout}
-                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all"
-                title="ログアウト"
+                disabled={isLoggingOut}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title={isLoggingOut ? "ログアウト中..." : "ログアウト"}
               >
-                <LogOut className="h-5 w-5" />
+                {isLoggingOut ? (
+                  <Loader className="h-5 w-5 animate-spin" />
+                ) : (
+                  <LogOut className="h-5 w-5" />
+                )}
               </button>
             </div>
           </div>
