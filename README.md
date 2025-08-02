@@ -16,7 +16,7 @@
 
 ```bash
 # リポジトリをクローン
-git clone <repository-url>
+git clone https://github.com/hayaf3254/hackathon-2025-0802.git
 cd worldend-task-app
 
 # 依存関係をインストール
