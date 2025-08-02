@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { error } = require('console');
 
 router.post('/return', async (req, res) => {
   // フロントから送られてくるidは、user_idとして扱う
@@ -49,5 +50,29 @@ router.get('/ranking', async (req, res) => {
   }
 
 });
+
+router.post('/getPoint', async (req, res) => {
+  const { id } = req.body;
+    if (!id) {
+        return res.status(400).json({ error: 'ユーザIDがないです' });
+    }
+    try{
+        const queryText = 'SELECT point FROM user_table WHERE id = $1';
+        const values = [id];
+
+        // データベースにクエリを送信
+        const { rows } = await db.query(queryText, values);
+
+        res.status(200).json(rows);
+
+
+    }
+    catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'データベースエラー' });
+    }
+
+});
+
 
 module.exports = router;
