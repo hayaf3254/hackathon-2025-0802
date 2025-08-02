@@ -25,7 +25,7 @@ export function useTaskMonitor() {
           // このタスクをチェック済みとしてマーク
           checkedTasksRef.current.add(task.id)
           
-          console.log(`Task "${task.title}" is overdue. -10 points deducted.`)
+          console.log(`Task "${task.title}" is overdue. -50 points deducted.`)
         }
       })
     }
