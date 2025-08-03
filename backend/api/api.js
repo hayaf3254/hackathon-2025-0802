@@ -123,6 +123,60 @@ router.post('/users', async (req, res) => {
   res.json({ message: 'User created' });
 })
 
+router.post('/judge', async (req, res) => {
+  const { task_id } = req.body;
+
+  if (!task_id) {
+    return res.status(400).json({ error: 'task_id is required' });
+  }
+
+  try {
+    const queryText = 'UPDATE task_table SET judge = TRUE WHERE task_id = $1 RETURNING *;';
+    const values = [task_id];
+
+    const result = await db.query(queryText, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    res.status(200).json({ message: 'Task judged successfully', updatedTask: result.rows[0] });
+  } catch (err) {
+    console.error('Error updating task:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+// POST /api/add-task
+
+router.post('/add-task', async (req, res) => {
+  const { id, todo, deadline } = req.body;
+
+  // バリデーション
+  if (!id || !todo || !deadline) {
+    return res.status(400).json({ error: 'id, todo, and deadline are required' });
+  }
+
+  try {
+    const queryText = `
+      INSERT INTO task_table (user_id, task, deadline, judge)
+      VALUES ($1, $2, $3, FALSE)
+      RETURNING *;
+    `;
+    const values = [id, todo, deadline];
+
+    const result = await db.query(queryText, values);
+
+    res.status(201).json({
+      message: 'Task added successfully',
+      newTask: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error inserting task:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 
 module.exports = router;
