@@ -301,9 +301,9 @@ function Result() {
 
             <div className="mt-6 pt-6 border-t border-gray-600">
               <div className="text-center">
-                <div className="text-sm text-gray-400 mb-1">初期ポイント: 100pt</div>
+                <div className="text-sm text-gray-400 mb-1">初期ポイント: 0pt</div>
                 <div className="text-sm text-gray-400 mb-2">
-                  変化: {stats.completed * 5 - stats.overdue * 10 > 0 ? '+' : ''}{stats.completed * 5 - stats.overdue * 10}pt
+                  累計変化: {user.points > 0 ? '+' : ''}{user.points}pt
                 </div>
                 <div className="text-xl font-bold text-worldEnd-gold">
                   現在: {user.points}pt

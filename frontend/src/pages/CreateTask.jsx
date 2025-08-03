@@ -18,6 +18,7 @@ function CreateTask() {
   const [isOcrProcessing, setIsOcrProcessing] = useState(false)
   const [ocrProgress, setOcrProgress] = useState(0)
   const [uploadedImage, setUploadedImage] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Handle form input changes
   const handleInputChange = (e) => {
@@ -71,7 +72,7 @@ function CreateTask() {
   }
 
   // Handle form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
     if (!formData.title.trim()) {
@@ -84,29 +85,41 @@ function CreateTask() {
       return
     }
 
-    // Combine date and time
-    const dueDateTime = formData.dueTime 
-      ? `${formData.dueDate}T${formData.dueTime}:00`
-      : `${formData.dueDate}T23:59:00`
-
-    // Create new task
-    const newTask = {
-      id: `task_${Date.now()}`,
-      title: formData.title.trim(),
-      due_date: dueDateTime,
-      completed: false,
-      created_at: new Date().toISOString()
-    }
-
-    actions.addTask(newTask)
+    setIsSubmitting(true)
     
-    // Clean up
-    if (uploadedImage) {
-      URL.revokeObjectURL(uploadedImage)
+    try {
+      // Combine date and time
+      const dueDateTime = formData.dueTime 
+        ? `${formData.dueDate}T${formData.dueTime}:00`
+        : `${formData.dueDate}T23:59:00`
+
+      // Create task data for both API and local state
+      const newTask = {
+        id: `task_${Date.now()}`, // 一時的なID（APIからの応答で更新される）
+        title: formData.title.trim(),
+        due_date: dueDateTime,
+        completed: false,
+        created_at: new Date().toISOString()
+      }
+
+      // API経由でタスクを作成（UserContextのaddTaskがAPIを呼び出す）
+      await actions.addTask(newTask)
+      
+      // Clean up
+      if (uploadedImage) {
+        URL.revokeObjectURL(uploadedImage)
+      }
+      
+      // Success message and navigation
+      console.log('タスクが正常に作成されました:', newTask.title)
+      navigate('/home')
+      
+    } catch (error) {
+      console.error('タスクの作成に失敗しました:', error)
+      alert('タスクの作成に失敗しました。もう一度お試しください。')
+    } finally {
+      setIsSubmitting(false)
     }
-    
-    // Navigate back to home
-    navigate('/home')
   }
 
   // Get minimum date (today)
@@ -249,13 +262,18 @@ function CreateTask() {
             </button>
             <button
               type="submit"
-              disabled={isOcrProcessing}
+              disabled={isOcrProcessing || isSubmitting}
               className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isOcrProcessing ? (
                 <div className="flex items-center justify-center space-x-2">
                   <Loader className="h-4 w-4 animate-spin" />
-                  <span>処理中...</span>
+                  <span>OCR処理中...</span>
+                </div>
+              ) : isSubmitting ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>作成中...</span>
                 </div>
               ) : (
                 '📝 タスクを追加'
@@ -270,7 +288,7 @@ function CreateTask() {
           <ul className="text-sm text-blue-200 space-y-1">
             <li>• 画像から手書きや印刷されたテキストを自動で読み取れます</li>
             <li>• 締切時間を指定しない場合、その日の23:59に設定されます</li>
-            <li>• タスクを完了すると +5ポイント、期限切れだと -10ポイントです</li>
+            <li>• ポイント制：期限1週間前まで+10pt、3日前まで+5pt、前日まで+3pt、当日+1pt、期限切れ-50pt</li>
           </ul>
         </div>
       </div>

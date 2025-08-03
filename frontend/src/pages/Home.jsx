@@ -1,11 +1,46 @@
 import React, { useEffect, useState } from 'react'
 import { useUser } from '../context/UserContext'
 import { Link } from 'react-router-dom'
-import { Clock, CheckCircle, AlertTriangle, Skull, Plus } from 'lucide-react'
+import { Clock, CheckCircle, AlertTriangle, Skull, Plus, Loader } from 'lucide-react'
 
 function Home() {
   const { user, tasks, worldState, actions, getWorldBackground } = useUser()
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+
+  const toNumericId = (userId) => {
+  if (typeof userId === 'string' && userId.startsWith('user_')) {
+    const numeric = parseInt(userId.split('_')[1], 10);
+    console.log('[toNumericId] Converted', userId, '→', numeric);
+    return numeric;
+  }
+  console.log('[toNumericId] Already numeric:', userId);
+  return userId;
+};
+
+
+  // Load user data from API on component mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user.id) return
+      
+      setIsLoading(true)
+      setLoadError(null)
+      
+      try {
+        await actions.loadUserData(toNumericId(user.id))
+        console.log('ユーザーデータをAPIから読み込みました')
+      } catch (error) {
+        console.error('ユーザーデータの読み込みに失敗:', error)
+        setLoadError('データの読み込みに失敗しました')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadUserData()
+  }, [user.id])
 
   // Update current time every minute
   useEffect(() => {
@@ -26,8 +61,14 @@ function Home() {
   )
 
   // Handle task completion
-  const handleCompleteTask = (taskId) => {
-    actions.completeTask(taskId)
+  const handleCompleteTask = async (taskId) => {
+    try {
+      await actions.completeTask(taskId)
+      console.log('タスクが完了しました:', taskId)
+    } catch (error) {
+      console.error('タスクの完了に失敗しました:', error)
+      alert('タスクの完了に失敗しました。もう一度お試しください。')
+    }
   }
 
   // Format date for display
@@ -61,6 +102,44 @@ function Home() {
       default:
         return '🌍'
     }
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen ${getWorldBackground()} transition-all duration-1000`}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="text-center">
+              <Loader className="h-16 w-16 text-worldEnd-gold mx-auto mb-4 animate-spin" />
+              <p className="text-white text-xl">データを読み込み中...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (loadError) {
+    return (
+      <div className={`min-h-screen ${getWorldBackground()} transition-all duration-1000`}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="text-center">
+              <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+              <p className="text-white text-xl mb-4">{loadError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-worldEnd-gold hover:bg-yellow-500 text-black px-6 py-2 rounded-lg transition-colors font-semibold"
+              >
+                再読み込み
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
