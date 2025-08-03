@@ -47,9 +47,9 @@ function Login() {
         
         // API接続に失敗した場合はフォールバック用のサンプルデータ
         setExistingUsers([
-          { id: 'user_001', name: 'ユーザー1', point: 0 },
-          { id: 'user_002', name: 'ユーザー2', point: 25 },
-          { id: 'user_003', name: 'ユーザー3', point: -30 }
+          { id: '1', name: 'ユーザー1', point: 0 },
+          { id: '2', name: 'ユーザー2', point: 25 },
+          { id: '3', name: 'ユーザー3', point: -30 }
         ])
         
         // API接続失敗時のメッセージ（エラーではなく情報として）

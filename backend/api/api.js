@@ -6,6 +6,10 @@ const { error } = require('console');
 router.post('/return', async (req, res) => {
   // フロントから送られてくるidは、user_idとして扱う
   const { id } = req.body;
+  console.log('受け取ったID:', id, typeof id);
+    if (typeof id !== 'number') {
+    return res.status(400).json({ message: 'Invalid ID' });
+  }
 
   // IDがボディに含まれていない場合はエラーを返す
   if (!id) {
@@ -106,5 +110,19 @@ router.put('/updatePoint', async (req, res) => {
     }
 
 });
+
+router.get('/users', async (req, res) => {
+  const users = await db.query('SELECT id, name, point FROM user_table');
+  res.json(users.rows);
+})
+
+router.post('/users', async (req, res) => {
+  const { id, name, password } = req.body;
+  const point = 0;
+  await db.query('INSERT INTO user_table (id, name, password, point) VALUES ($1, $2, $3, $4)', [id, name, password, point]);
+  res.json({ message: 'User created' });
+})
+
+
 
 module.exports = router;

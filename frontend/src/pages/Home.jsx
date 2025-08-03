@@ -9,6 +9,17 @@ function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState(null)
 
+  const toNumericId = (userId) => {
+  if (typeof userId === 'string' && userId.startsWith('user_')) {
+    const numeric = parseInt(userId.split('_')[1], 10);
+    console.log('[toNumericId] Converted', userId, '→', numeric);
+    return numeric;
+  }
+  console.log('[toNumericId] Already numeric:', userId);
+  return userId;
+};
+
+
   // Load user data from API on component mount
   useEffect(() => {
     const loadUserData = async () => {
@@ -18,7 +29,7 @@ function Home() {
       setLoadError(null)
       
       try {
-        await actions.loadUserData(user.id)
+        await actions.loadUserData(toNumericId(user.id))
         console.log('ユーザーデータをAPIから読み込みました')
       } catch (error) {
         console.error('ユーザーデータの読み込みに失敗:', error)
@@ -29,7 +40,7 @@ function Home() {
     }
 
     loadUserData()
-  }, [user.id, actions])
+  }, [user.id])
 
   // Update current time every minute
   useEffect(() => {

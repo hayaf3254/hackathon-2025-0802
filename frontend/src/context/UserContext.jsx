@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react'
 import { 
-  createTask as apiCreateTask,
-  completeTask as apiCompleteTask,
+  //createTask as apiCreateTask,
+  //completeTask as apiCompleteTask,
   getUserTasks,
   getUserPoints,
   updateUserPoints,
@@ -231,19 +231,19 @@ export function UserProvider({ children }) {
   const actions = {
     setTasks: (tasks) => dispatch({ type: ActionTypes.SET_TASKS, payload: tasks }),
     
-    addTask: async (task) => {
-      try {
-        // APIでタスクを作成
-        await apiCreateTask(state.user.id, task.title, task.due_date)
-        // ローカル状態も更新
-        dispatch({ type: ActionTypes.ADD_TASK, payload: task })
-        console.log('Task created:', task.title)
-      } catch (error) {
-        console.error('Failed to create task:', error)
-        // エラーの場合もローカル状態は更新（オフライン対応）
-        dispatch({ type: ActionTypes.ADD_TASK, payload: task })
-      }
-    },
+    // addTask: async (task) => {
+    //   try {
+    //     // APIでタスクを作成
+    //     await apiCreateTask(state.user.id, task.title, task.due_date)
+    //     // ローカル状態も更新
+    //     dispatch({ type: ActionTypes.ADD_TASK, payload: task })
+    //     console.log('Task created:', task.title)
+    //   } catch (error) {
+    //     console.error('Failed to create task:', error)
+    //     // エラーの場合もローカル状態は更新（オフライン対応）
+    //     dispatch({ type: ActionTypes.ADD_TASK, payload: task })
+    //   }
+    // },
     
     completeTask: async (taskId, completedAt = new Date().toISOString()) => {
       const task = state.tasks.find(t => t.id === taskId)
@@ -340,13 +340,17 @@ export function UserProvider({ children }) {
     },
     
     // APIからユーザーデータを読み込む
-    loadUserData: async (userId) => {
-      try {
-        // タスクとポイントを並行取得
-        const [tasks, points] = await Promise.all([
-          getUserTasks(userId),
-          getUserPoints(userId)
-        ])
+loadUserData: async (userId) => {
+  try {
+    const numericId = typeof userId === 'string' && userId.startsWith('user_')
+      ? parseInt(userId.split('_')[1], 10)
+      : userId
+
+    const [tasks, points] = await Promise.all([
+      getUserTasks(numericId),
+      getUserPoints(numericId)
+    ])
+
         
         // バックエンド形式をフロントエンド形式に変換
         const transformedTasks = transformTasksFromBackend(tasks)

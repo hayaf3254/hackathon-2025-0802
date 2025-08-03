@@ -1,6 +1,18 @@
 // API Base URL
 const API_BASE_URL = 'http://localhost:3000'
 
+
+
+const toNumericId = (userId) => {
+  if (typeof userId === 'string' && userId.startsWith('user_')) {
+    const numeric = parseInt(userId.split('_')[1], 10);
+    console.log('[toNumericId] Converted', userId, '→', numeric);
+    return numeric;
+  }
+  console.log('[toNumericId] Already numeric:', userId);
+  return userId;
+};
+
 // API Error Handler
 const handleApiError = async (response) => {
   if (!response.ok) {
@@ -73,30 +85,30 @@ const apiRequest = async (endpoint, options = {}) => {
  * @param {string} deadline - 期限 (datetime)
  * @returns {Promise} API Response
  */
-export const createTask = async (userId, task, deadline) => {
-  return apiRequest('/api/tasks', {
-    method: 'POST',
-    body: JSON.stringify({
-      id: userId,
-      todo: task,
-      deadline: deadline
-    })
-  })
-}
+// export const createTask = async (userId, task, deadline) => {
+//   return apiRequest('/api/tasks', {
+//     method: 'POST',
+//     body: JSON.stringify({
+//       id: userId,
+//       todo: task,
+//       deadline: deadline
+//     })
+//   })
+// }
 
 /**
  * タスクを完了にする
- * @param {string} taskId - タスクID
- * @returns {Promise} API Response
- */
-export const completeTask = async (taskId) => {
-  return apiRequest('/api/tasks/complete', {
-    method: 'PUT',
-    body: JSON.stringify({
-      task_id: taskId
-    })
-  })
-}
+//  * @param {string} taskId - タスクID
+//  * @returns {Promise} API Response
+//  */
+// export const completeTask = async (taskId) => {
+//   return apiRequest('/api/tasks/complete', {
+//     method: 'PUT',
+//     body: JSON.stringify({
+//       task_id: taskId
+//     })
+//   })
+// }
 
 /**
  * ユーザーのタスク一覧を取得する
@@ -104,10 +116,10 @@ export const completeTask = async (taskId) => {
  * @returns {Promise<Array>} タスク一覧 [{task_id, task, deadline, judge}, ...]
  */
 export const getUserTasks = async (userId) => {
-  return apiRequest('/api/tasks/user', {
+  return apiRequest('/api/return', {
     method: 'POST',
     body: JSON.stringify({
-      id: userId
+      id: toNumericId(userId)
     })
   })
 }
@@ -140,7 +152,7 @@ export const createUser = async (userId, name, password = '') => {
     const result = await apiRequest('/api/users', {
       method: 'POST',
       body: JSON.stringify({
-        id: userId,
+        id: toNumericId(userId),
         name: name,
         password: password
       })
@@ -186,31 +198,31 @@ export const getUserInfo = async (userId) => {
 
 /**
  * ユーザーのポイントを取得する
- * @param {string} userId - ユーザーID
- * @returns {Promise<number>} ポイント
+ * @param {string} userId
+ * @returns {Promise<number>}
  */
 export const getUserPoints = async (userId) => {
-  const response = await apiRequest('/api/user/points', {
+  const res = await apiRequest('/api/getPoint', {
     method: 'POST',
-    body: JSON.stringify({
-      id: userId
-    })
+    body: JSON.stringify({ id: toNumericId(userId) })
   })
-  return response.point
+  // 配列形式で返ってくるので1件目からpointを取り出す
+  return Array.isArray(res) ? res[0]?.point ?? 0 : 0
 }
+
 
 /**
  * ユーザーのポイントを更新する
- * @param {string} userId - ユーザーID
- * @param {number} newPoints - 新しいポイント
- * @returns {Promise} API Response
+ * @param {string} userId
+ * @param {number} newPoints
+ * @returns {Promise<object>}
  */
 export const updateUserPoints = async (userId, newPoints) => {
-  return apiRequest('/api/user/points', {
+  return apiRequest('/api/updatePoint', {
     method: 'PUT',
     body: JSON.stringify({
-      id: userId,
-      point: newPoints
+      id: String(toNumericId(userId)),    // 念のため文字列に
+      point: String(newPoints)
     })
   })
 }
@@ -226,14 +238,13 @@ export const updateUserPoints = async (userId, newPoints) => {
  */
 export const transformTaskFromBackend = (backendTask) => {
   return {
-    id: backendTask.task_id,
-    title: backendTask.task,
-    due_date: backendTask.deadline,
-    completed: backendTask.judge,
-    completed_at: backendTask.judge ? new Date().toISOString() : null
+    id: backendTask.task_id,             // ← task_id → id
+    title: backendTask.task,             // ← task → title
+    due_date: backendTask.deadline,      // ← deadline → due_date
+    completed: backendTask.judge         // ← judge → completed
+    // completed_at は使わない・渡さない
   }
 }
-
 /**
  * 複数のタスクデータを変換
  * @param {Array} backendTasks - バックエンドからのタスクデータ配列

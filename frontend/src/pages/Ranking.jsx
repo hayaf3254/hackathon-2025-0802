@@ -14,12 +14,12 @@ function Ranking() {
       // 実際の実装ではAPIを呼び出す
       setTimeout(() => {
         const sampleData = [
-          { id: 'user_002', name: 'マスター太郎', points: 150, rank: 1, tasksCompleted: 25, worldState: 'normal' },
-          { id: 'user_005', name: 'タスクハンター花子', points: 89, rank: 2, tasksCompleted: 18, worldState: 'normal' },
-          { id: 'user_003', name: 'がんばる三郎', points: 45, rank: 3, tasksCompleted: 12, worldState: 'warning' },
-          { id: 'user_001', name: user.name || user.id, points: user.points, rank: 4, tasksCompleted: 8, worldState: user.worldState },
-          { id: 'user_004', name: 'のんびり四郎', points: -25, rank: 5, tasksCompleted: 5, worldState: 'critical' },
-          { id: 'user_006', name: '初心者五郎', points: -80, rank: 6, tasksCompleted: 2, worldState: 'critical' },
+          { id: '2', name: 'マスター太郎', points: 150, rank: 1, tasksCompleted: 25, worldState: 'normal' },
+          { id: '5', name: 'タスクハンター花子', points: 89, rank: 2, tasksCompleted: 18, worldState: 'normal' },
+          { id: '3', name: 'がんばる三郎', points: 45, rank: 3, tasksCompleted: 12, worldState: 'warning' },
+          { id: '1', name: user.name || user.id, points: user.points, rank: 4, tasksCompleted: 8, worldState: user.worldState },
+          { id: '4', name: 'のんびり四郎', points: -25, rank: 5, tasksCompleted: 5, worldState: 'critical' },
+          { id: '6', name: '初心者五郎', points: -80, rank: 6, tasksCompleted: 2, worldState: 'critical' },
         ]
         setRankingData(sampleData)
         setLoading(false)
