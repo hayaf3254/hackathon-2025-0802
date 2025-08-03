@@ -1,4 +1,20 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react'
+import { 
+  createTask as apiCreateTask,
+  completeTask as apiCompleteTask,
+  getUserTasks,
+  getUserPoints,
+  updateUserPoints,
+  transformTasksFromBackend
+} from '../services/api'
+
+// 空のユーザー状態を返す関数
+const getEmptyUser = () => ({
+  id: '',
+  name: '',
+  points: 0,
+  isWorldDestroyed: false
+})
 
 // localStorageからログイン情報を取得
 const getStoredUser = () => {
@@ -15,29 +31,61 @@ const getStoredUser = () => {
     }
   } catch (error) {
     console.error('Failed to parse stored user data:', error)
+    // エラーの場合はlocalStorageをクリア
+    localStorage.removeItem('worldend_user')
   }
-  return {
-    id: 'user_001',
-    points: 0,
-    isWorldDestroyed: false
-  }
+  // localStorageにデータがない場合は空の状態を返す
+  return getEmptyUser()
 }
 
-// Helper function to determine world state based on points (define early)
-function getWorldState(points) {
-  if (points < -100) return 'destroyed'
-  if (points < -20) return 'critical'
-  if (points < 50) return 'warning'
+// Helper function to calculate days until due date
+function getDaysUntilDue(dueDate) {
+  const now = new Date()
+  const due = new Date(dueDate)
+  const timeDiff = due - now
+  return Math.ceil(timeDiff / (1000 * 60 * 60 * 24))
+}
+
+// Helper function to determine world state based on task deadlines
+function getWorldState(tasks) {
+  if (!tasks || tasks.length === 0) return 'normal'
+  
+  const activeTasks = tasks.filter(task => !task.completed)
+  if (activeTasks.length === 0) return 'normal'
+  
+  // 期限切れのタスクが1つでもあれば世界は滅亡
+  const hasOverdueTasks = activeTasks.some(task => {
+    const daysUntilDue = getDaysUntilDue(task.due_date)
+    return daysUntilDue < 0
+  })
+  if (hasOverdueTasks) return 'destroyed'
+  
+  // 3日以内のタスクがあれば危険状態
+  const hasCriticalTasks = activeTasks.some(task => {
+    const daysUntilDue = getDaysUntilDue(task.due_date)
+    return daysUntilDue >= 0 && daysUntilDue <= 3
+  })
+  if (hasCriticalTasks) return 'critical'
+  
+  // 1週間以内のタスクがあれば警告状態
+  const hasWarningTasks = activeTasks.some(task => {
+    const daysUntilDue = getDaysUntilDue(task.due_date)
+    return daysUntilDue > 3 && daysUntilDue <= 7
+  })
+  if (hasWarningTasks) return 'warning'
+  
+  // 1週間以上余裕がある場合は平常状態
   return 'normal'
 }
 
 // Initial state
 const getInitialState = () => {
   const user = getStoredUser()
+  const tasks = [] // Empty tasks list
   return {
     user,
-    tasks: [], // Empty tasks list
-    worldState: getWorldState(user.points) // ユーザーのポイントに基づいて世界状態を設定
+    tasks,
+    worldState: getWorldState(tasks) // タスクに基づいて世界状態を設定
   }
 }
 
@@ -61,10 +109,20 @@ export const ActionTypes = {
 function userReducer(state, action) {
   switch (action.type) {
     case ActionTypes.SET_TASKS:
-      return { ...state, tasks: action.payload }
+      const newTasks = action.payload
+      return { 
+        ...state, 
+        tasks: newTasks,
+        worldState: getWorldState(newTasks)
+      }
     
     case ActionTypes.ADD_TASK:
-      return { ...state, tasks: [...state.tasks, action.payload] }
+      const tasksWithNew = [...state.tasks, action.payload]
+      return { 
+        ...state, 
+        tasks: tasksWithNew,
+        worldState: getWorldState(tasksWithNew)
+      }
     
     case ActionTypes.COMPLETE_TASK:
       const updatedTasks = state.tasks.map(task =>
@@ -72,19 +130,21 @@ function userReducer(state, action) {
           ? { ...task, completed: true, completed_at: action.payload.completedAt }
           : task
       )
-      return { ...state, tasks: updatedTasks }
+      return { 
+        ...state, 
+        tasks: updatedTasks,
+        worldState: getWorldState(updatedTasks)
+      }
     
     case ActionTypes.UPDATE_POINTS:
       const newPoints = state.user.points + action.payload // マイナス値も許可
-      const isDestroyed = newPoints < -100
       return {
         ...state,
         user: {
           ...state.user,
           points: newPoints,
-          isWorldDestroyed: isDestroyed
-        },
-        worldState: getWorldState(newPoints)
+          isWorldDestroyed: state.worldState === 'destroyed'
+        }
       }
     
     case ActionTypes.SET_WORLD_STATE:
@@ -105,16 +165,18 @@ function userReducer(state, action) {
       }
     
     case ActionTypes.LOGIN_USER:
+      const loginTasks = action.payload.tasks || []
+      const loginWorldState = getWorldState(loginTasks)
       return {
         ...state,
         user: {
           id: action.payload.id,
           name: action.payload.name,
           points: action.payload.points || 0,
-          isWorldDestroyed: false
+          isWorldDestroyed: loginWorldState === 'destroyed'
         },
-        tasks: action.payload.tasks || [],
-        worldState: getWorldState(action.payload.points || 0)
+        tasks: loginTasks,
+        worldState: loginWorldState
       }
     
     case ActionTypes.CREATE_USER:
@@ -131,8 +193,11 @@ function userReducer(state, action) {
       }
     
     case ActionTypes.LOGOUT_USER:
+      // ログアウト時は完全に空の状態にリセット
       return {
-        ...initialState
+        user: getEmptyUser(),
+        tasks: [],
+        worldState: 'normal'
       }
     
     default:
@@ -166,56 +231,135 @@ export function UserProvider({ children }) {
   const actions = {
     setTasks: (tasks) => dispatch({ type: ActionTypes.SET_TASKS, payload: tasks }),
     
-    addTask: (task) => dispatch({ type: ActionTypes.ADD_TASK, payload: task }),
+    addTask: async (task) => {
+      try {
+        // APIでタスクを作成
+        await apiCreateTask(state.user.id, task.title, task.due_date)
+        // ローカル状態も更新
+        dispatch({ type: ActionTypes.ADD_TASK, payload: task })
+        console.log('Task created:', task.title)
+      } catch (error) {
+        console.error('Failed to create task:', error)
+        // エラーの場合もローカル状態は更新（オフライン対応）
+        dispatch({ type: ActionTypes.ADD_TASK, payload: task })
+      }
+    },
     
-    completeTask: (taskId, completedAt = new Date().toISOString()) => {
-      // タスクを見つけて段階的ポイント制でポイントを計算
+    completeTask: async (taskId, completedAt = new Date().toISOString()) => {
       const task = state.tasks.find(t => t.id === taskId)
       if (task) {
-        const points = calculateTaskPoints(task.due_date, completedAt)
-        dispatch({
-          type: ActionTypes.COMPLETE_TASK,
-          payload: { taskId, completedAt }
-        })
-        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: points })
+        try {
+          // APIでタスクを完了に更新
+          await apiCompleteTask(taskId)
+          
+          // ポイント計算
+          const points = calculateTaskPoints(task.due_date, completedAt)
+          
+          // ローカル状態を更新
+          dispatch({
+            type: ActionTypes.COMPLETE_TASK,
+            payload: { taskId, completedAt }
+          })
+          
+          // ポイントをAPIで更新
+          const newPoints = state.user.points + points
+          await updateUserPoints(state.user.id, newPoints)
+          dispatch({ type: ActionTypes.UPDATE_POINTS, payload: points })
+          
+          // localStorageも更新
+          const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
+          if (currentUser.id) {
+            localStorage.setItem('worldend_user', JSON.stringify({
+              ...currentUser,
+              points: newPoints
+            }))
+          }
+          
+          console.log('Task completed:', task.title, `+${points}pt`)
+        } catch (error) {
+          console.error('Failed to complete task:', error)
+          // エラーの場合もローカルで処理（オフライン対応）
+          const points = calculateTaskPoints(task.due_date, completedAt)
+          dispatch({
+            type: ActionTypes.COMPLETE_TASK,
+            payload: { taskId, completedAt }
+          })
+          dispatch({ type: ActionTypes.UPDATE_POINTS, payload: points })
+        }
+      }
+    },
+    
+    failTask: async () => {
+      try {
+        // ペナルティポイント
+        const penalty = -50
+        const newPoints = state.user.points + penalty
+        
+        // APIでポイントを更新
+        await updateUserPoints(state.user.id, newPoints)
+        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: penalty })
         
         // localStorageも更新
         const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
         if (currentUser.id) {
-          const newPoints = currentUser.points + points
           localStorage.setItem('worldend_user', JSON.stringify({
             ...currentUser,
             points: newPoints
           }))
         }
+        
+        console.log('Task failed: -50pt penalty applied')
+      } catch (error) {
+        console.error('Failed to update points for task failure:', error)
+        // エラーの場合もローカルで処理
+        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: -50 })
       }
     },
     
-    failTask: () => {
-      // 期限切れのペナルティを-50ポイントに変更
-      dispatch({ type: ActionTypes.UPDATE_POINTS, payload: -50 })
-      
-      // localStorageも更新
-      const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
-      if (currentUser.id) {
-        const newPoints = currentUser.points - 50
-        localStorage.setItem('worldend_user', JSON.stringify({
-          ...currentUser,
-          points: newPoints
-        }))
+    updatePoints: async (pointChange) => {
+      try {
+        const newPoints = state.user.points + pointChange
+        
+        // APIでポイントを更新
+        await updateUserPoints(state.user.id, newPoints)
+        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: pointChange })
+        
+        // localStorageも更新
+        const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
+        if (currentUser.id) {
+          localStorage.setItem('worldend_user', JSON.stringify({
+            ...currentUser,
+            points: newPoints
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to update points:', error)
+        // エラーの場合もローカルで処理
+        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: pointChange })
       }
     },
     
-    updatePoints: (pointChange) => {
-      dispatch({ type: ActionTypes.UPDATE_POINTS, payload: pointChange })
-      // localStorageも更新
-      const currentUser = JSON.parse(localStorage.getItem('worldend_user') || '{}')
-      if (currentUser.id) {
-        const newPoints = currentUser.points + pointChange
-        localStorage.setItem('worldend_user', JSON.stringify({
-          ...currentUser,
-          points: newPoints
-        }))
+    // APIからユーザーデータを読み込む
+    loadUserData: async (userId) => {
+      try {
+        // タスクとポイントを並行取得
+        const [tasks, points] = await Promise.all([
+          getUserTasks(userId),
+          getUserPoints(userId)
+        ])
+        
+        // バックエンド形式をフロントエンド形式に変換
+        const transformedTasks = transformTasksFromBackend(tasks)
+        
+        // 状態を更新
+        dispatch({ type: ActionTypes.SET_TASKS, payload: transformedTasks })
+        dispatch({ type: ActionTypes.UPDATE_POINTS, payload: points - state.user.points })
+        
+        console.log(`Loaded user data: ${transformedTasks.length} tasks, ${points} points`)
+        return { tasks: transformedTasks, points }
+      } catch (error) {
+        console.error('Failed to load user data:', error)
+        throw error
       }
     },
     
@@ -223,11 +367,22 @@ export function UserProvider({ children }) {
     
     resetWorld: () => dispatch({ type: ActionTypes.RESET_WORLD }),
     
-    loginUser: (id, name, points = 0, tasks = []) => {
-      dispatch({
-        type: ActionTypes.LOGIN_USER,
-        payload: { id, name, points, tasks }
-      })
+    loginUser: async (id, name, points = 0, tasks = []) => {
+      try {
+        console.log('UserContext: ログイン処理開始:', { id, name, points, tasksCount: tasks.length })
+        
+        // ローカル状態を更新
+        dispatch({
+          type: ActionTypes.LOGIN_USER,
+          payload: { id, name, points, tasks }
+        })
+        
+        console.log('UserContext: ログイン処理完了')
+        return { success: true }
+      } catch (error) {
+        console.error('UserContext: ログイン処理エラー:', error)
+        throw error
+      }
     },
     
     createUser: (id, name) => {
@@ -237,7 +392,17 @@ export function UserProvider({ children }) {
       })
     },
     
-    logoutUser: () => dispatch({ type: ActionTypes.LOGOUT_USER })
+    logoutUser: () => {
+      try {
+        console.log('UserContext: ログアウト処理開始')
+        dispatch({ type: ActionTypes.LOGOUT_USER })
+        console.log('UserContext: ログアウト処理完了')
+      } catch (error) {
+        console.error('UserContext: ログアウト処理エラー:', error)
+        // エラーが起きてもログアウトは実行
+        dispatch({ type: ActionTypes.LOGOUT_USER })
+      }
+    }
   }
 
   // World background images based on world state

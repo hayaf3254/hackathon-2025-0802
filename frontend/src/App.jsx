@@ -14,18 +14,35 @@ import { useTaskMonitor } from './hooks/useTaskMonitor'
 
 // Inner App component that uses the context
 function AppContent() {
-  const { user } = useUser()
+  const { user, getWorldBackground } = useUser()
   
-  // ログイン状態チェック（nameがあるか、localStorageにユーザー情報がある場合はログイン済み）
-  const isLoggedIn = user.name || localStorage.getItem('worldend_user')
+  // ログイン状態チェック（localStorageベースでより確実に判定）
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  
+  useEffect(() => {
+    const storedUser = localStorage.getItem('worldend_user')
+    const hasValidUser = storedUser && user.id
+    setIsLoggedIn(hasValidUser)
+    
+    // デバッグ用ログ
+    console.log('Login status check:', {
+      storedUser: !!storedUser,
+      userId: user.id,
+      userName: user.name,
+      isLoggedIn: hasValidUser
+    })
+  }, [user.id, user.name])
 
   // Monitor tasks for overdue status (ログイン時のみ)
   useTaskMonitor()
 
+  // 期限ベースの背景色を取得
+  const worldBackgroundClass = getWorldBackground()
+
   // ログインしていない場合はログイン画面のみ表示
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen world-background">
+      <div className={`min-h-screen ${worldBackgroundClass}`}>
         <Routes>
           <Route path="*" element={<Login />} />
         </Routes>
@@ -35,7 +52,7 @@ function AppContent() {
 
   // ログイン済みの場合は通常のアプリを表示
   return (
-    <div className="min-h-screen world-background">
+    <div className={`min-h-screen ${worldBackgroundClass}`}>
       <Header />
       <main className="container mx-auto px-4 py-8">
         <Routes>

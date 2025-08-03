@@ -2,13 +2,18 @@ import { useEffect, useRef } from 'react'
 import { useUser } from '../context/UserContext'
 
 /**
- * タスクの期限切れを監視し、自動的にポイントを減らすカスタムフック
+ * タスクの期限を監視し、期限ベースの世界状態を管理するカスタムフック  
  */
 export function useTaskMonitor() {
-  const { tasks, actions } = useUser()
+  const { tasks, actions, worldState, user } = useUser()
   const checkedTasksRef = useRef(new Set())
 
   useEffect(() => {
+    // ログインしていない場合は何もしない
+    if (!user.id) {
+      return
+    }
+
     const checkOverdueTasks = () => {
       const now = new Date()
       
@@ -19,13 +24,13 @@ export function useTaskMonitor() {
           new Date(task.due_date) < now && 
           !checkedTasksRef.current.has(task.id)
         ) {
-          // ポイントを減らす
+          // ポイントを減らす（既存の機能を保持）
           actions.failTask()
           
           // このタスクをチェック済みとしてマーク
           checkedTasksRef.current.add(task.id)
           
-          console.log(`Task "${task.title}" is overdue. -50 points deducted.`)
+          console.log(`Task "${task.title}" is overdue. -50 points deducted. World state: ${worldState}`)
         }
       })
     }
@@ -37,7 +42,7 @@ export function useTaskMonitor() {
     const interval = setInterval(checkOverdueTasks, 60000)
 
     return () => clearInterval(interval)
-  }, [tasks, actions])
+  }, [tasks, actions, worldState, user.id])
 
   // タスクが完了した時にチェック済みリストから除外
   useEffect(() => {
@@ -49,4 +54,9 @@ export function useTaskMonitor() {
       checkedTasksRef.current.delete(id)
     })
   }, [tasks])
+
+  // 世界状態の変化をログに記録（デバッグ用）
+  useEffect(() => {
+    console.log(`World state changed to: ${worldState}`)
+  }, [worldState])
 } 
